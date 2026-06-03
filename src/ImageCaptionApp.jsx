@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const GEMINI_KEY = 'AIzaSyDZSVz18nVWFyFaML5WthT8t3vdB7YRqVg'
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE = 10 * 1024 * 1024
 
@@ -12,7 +12,6 @@ export default function ImageCaptionApp() {
   const [error, setError] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef(null)
-  const previewRef = useRef(null)
 
   useEffect(() => {
     return () => {
@@ -44,27 +43,51 @@ export default function ImageCaptionApp() {
     if (file) handleFile(file)
   }
 
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result
+      const base64 = result.split(',')[1]
+      resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+
+  const callGemini = async (parts) => {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] }),
+      }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`)
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+
   const handleSubmit = async () => {
     if (!image) return
     setLoading(true)
     setError(null)
     setResult(null)
 
-    const formData = new FormData()
-    formData.append('file', image)
-
     try {
-      const res = await fetch(`${API_URL}/generate-caption`, {
-        method: 'POST',
-        body: formData,
-      })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(text || `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setResult(data)
+      const base64 = await fileToBase64(image)
+      const mimeType = image.type
+
+      const description = await callGemini([
+        { text: 'Describe this image concisely in one sentence (max 20 words).' },
+        { inline_data: { mime_type: mimeType, data: base64 } },
+      ])
+
+      const title = await callGemini([
+        { text: `Generate a short title (2-5 words) for: "${description}". Return only the title.` },
+      ])
+
+      setResult({ title, description })
     } catch (err) {
       setError(err.message || 'Failed to generate caption')
     } finally {
@@ -103,7 +126,6 @@ export default function ImageCaptionApp() {
         />
         {preview ? (
           <img
-            ref={previewRef}
             src={preview}
             alt="Preview"
             style={{ maxWidth: '100%', maxHeight: 300, borderRadius: 8 }}
