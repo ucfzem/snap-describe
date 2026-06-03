@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 
-const GEMINI_KEY = 'AIzaSyDZSVz18nVWFyFaML5WthT8t3vdB7YRqVg'
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY
+const MODEL = 'gemini-2.5-flash'
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE = 10 * 1024 * 1024
 
@@ -56,7 +57,7 @@ export default function ImageCaptionApp() {
 
   const callGemini = async (parts) => {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
